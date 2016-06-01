@@ -23,13 +23,18 @@ def read_weather(filename):
 def read_traffic(filename):
     cols = ['district_hash', 'tj_level', 'tj_time']
     df = pd.read_csv(filename, header=None, sep='\t', names=cols)
-    return df
-    
+    return df    
     
 def read_poi(filename):
     cols = ['district_hash', 'poi_class']
     df = pd.read_csv(filename, header=None, sep='\t', names=cols)
-    return df   
+    return df
+    
+def read_submit(filename): 
+    cols = ['year','month','day','slot']
+    df = pd.read_csv(filename, header=0, sep='-', names=cols)
+    df['time'] = pd.read_csv(filename, header=0, names=['time'])    
+    return df
    
 def process_order(df):
     df["answered"] = df['driver_id'].notnull().astype(int)
@@ -54,6 +59,7 @@ if __name__ == '__main__':
     order_path = "\\order_data\\order_data_2016-01-"    
     train_data = pd.concat(read_order(train_path + order_path + str(i).zfill(2)) for i in range(1, 22))
     test_data = pd.concat(read_order(test_path + order_path + str(i).zfill(2) + "_test") for i in [22,24,26,28,30])
+    submit_data = read_submit(test_path + "\\read_me_1.txt")
     
     id_data = read_district(test_path + "\\cluster_map\\cluster_map")
 
@@ -95,3 +101,15 @@ if __name__ == '__main__':
     error = mape(df_test["gap"].values, predict_gap)
     print(error)
     
+    #%%
+    df_submit = pd.DataFrame(list(range(1,67)),columns=['district_id'])
+    df_submit["key"] = 0
+    submit_data["key"] = 0
+    df_submit = pd.merge(df_submit, submit_data, how='outer', on='key')
+    df_submit.drop(['key'], axis = 1, inplace = True)
+    predict_req = reg_req.predict(df_submit[cols])
+    predict_ans = reg_ans.predict(df_submit[cols])
+    predict_gap = predict_req - predict_ans
+    predict_gap[predict_gap < 0] = 0
+    df_submit['gap'] = predict_gap
+    df_submit.to_csv('submit.csv', header=False, index=False, columns=['district_id','time','gap'])
