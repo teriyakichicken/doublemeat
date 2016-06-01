@@ -36,13 +36,9 @@ def process_order(df):
     df["time"] = pd.to_datetime(df["time"])
     df["day"] = df["time"].dt.day
     df["slot"] = df["time"].dt.hour * 6 + df["time"].dt.minute // 10 + 1
-    # drop useless columns
-    df.drop(["order_id"], axis = 1, inplace = True)
-    df.drop(["driver_id"], axis = 1, inplace = True)     
-    df.drop(["passenger_id"], axis = 1, inplace = True)
-    df.drop(["dest_district_hash"], axis = 1, inplace = True)
-    df.drop(["time"], axis = 1, inplace = True)
-    df.drop(["price"], axis = 1, inplace = True)
+    
+    cols = ["order_id","driver_id","passenger_id","dest_district_hash","time","price"]
+    df.drop(cols, axis = 1, inplace = True)
     
 def mape(y_true, y_pred):
     y_pred = y_pred[y_true > 0]
@@ -54,19 +50,21 @@ if __name__ == '__main__':
     path = ".\\citydata\\season_1"
     train_path = path + "\\training_data"
     test_path = path + "\\test_set_1"
-    order_path = "\\order_data\\order_data_2016-01-"
-    train_data = read_order(train_path + order_path + "21")
-    test_data = read_order(test_path + order_path + "22_test")
+    
+    order_path = "\\order_data\\order_data_2016-01-"    
+    train_data = pd.concat(read_order(train_path + order_path + str(i).zfill(2)) for i in range(1, 22))
+    test_data = pd.concat(read_order(test_path + order_path + str(i).zfill(2) + "_test") for i in [22,24,26,28,30])
+    
     id_data = read_district(test_path + "\\cluster_map\\cluster_map")
 
     #%%    
-    df = pd.concat([train_data, test_data])
-    df = pd.merge(df, id_data, left_on=['start_district_hash'], right_on=['district_hash'])
-    df.drop(["start_district_hash", "district_hash"], axis = 1, inplace = True)    
-    process_order(df)
+    df1 = pd.concat([train_data, test_data])
+    df1 = pd.merge(df1, id_data, left_on=['start_district_hash'], right_on=['district_hash'])
+    df1.drop(["start_district_hash", "district_hash"], axis = 1, inplace = True)    
+    process_order(df1)
 
     #%%
-    df2 = df.groupby(['district_id', 'day', 'slot'])['answered'].agg({'request':'count', 'answer':'sum'}).reset_index()
+    df2 = df1.groupby(['district_id', 'day', 'slot'])['answered'].agg({'request':'count', 'answer':'sum'}).reset_index()
     no_data = pd.DataFrame(list(product(list(range(1,67)),list(range(1,145)))), columns=['district_id', 'slot'])
     no_data["day"] = 21
     no_data["answer"] = 0
@@ -82,14 +80,15 @@ if __name__ == '__main__':
     plt.show()
     
     #%%
-    df_train = df3[(df3["day"]==21)]
-    df_test = df3[(df3["day"]==22)]
+    df_train = df3[(df3["day"]<=21)]
+    df_test = df3[(df3["day"]>=22)]
+    cols = ['district_id','slot']
     reg_req = RandomForestRegressor(random_state = 0)
-    reg_req.fit(df_train[['district_id', 'slot']], df_train['request'])
-    predict_req = reg_req.predict(df_test[['district_id', 'slot']])
+    reg_req.fit(df_train[cols], df_train['request'])
+    predict_req = reg_req.predict(df_test[cols])
     reg_ans = RandomForestRegressor(random_state = 0)
-    reg_ans.fit(df_train[['district_id', 'slot']], df_train['answer'])
-    predict_ans = reg_ans.predict(df_test[['district_id', 'slot']])
+    reg_ans.fit(df_train[cols], df_train['answer'])
+    predict_ans = reg_ans.predict(df_test[cols])
     predict_gap = predict_req - predict_ans
     predict_gap[predict_gap < 0] = 0
     #df_test.insert(0, "predict_gap", predict_gap)
